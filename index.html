@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-title" content="Turni Lorena">
+<title>Turni Lorena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: una colonna mobile; carica screenshot → mesi rilevati e modificabili → esporta .ics. */
+:root{
+  --bg:#f2f1ec; --surface:#ffffff; --ink:#1f1b18; --muted:#6b645c; --line:#e0dcd4;
+  --accent:#2d5c4c; --accent-ink:#ffffff; --note:#f3e07a; --danger:#a23a2a;
+  --font-display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --font-body:"IBM Plex Sans",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --radius:14px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#13110f; --surface:#1d1a17; --ink:#ede8e2; --muted:#a39a90; --line:#2f2a25;
+    --accent:#86bda8; --accent-ink:#0f1a16; --note:#d9c25a; --danger:#e07a68; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;overflow-x:hidden;max-width:100%}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 96px;display:flex;flex-direction:column;gap:20px}
+.wrap > *{min-width:0}
+h1,h2,h3{font-family:var(--font-display);margin:0;letter-spacing:-0.01em;text-wrap:balance}
+h1{font-size:30px;font-weight:700;line-height:1.1}
+h2{font-size:20px;font-weight:700}
+.top p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.muted{color:var(--muted)} .small{font-size:13px}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px;font-weight:500;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;touch-action:manipulation}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.danger{color:var(--danger);background:transparent;border-color:transparent}
+.btn.small{padding:6px 12px;font-size:14px}
+.btn.big{padding:13px 20px;font-size:16px;width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+
+.pick{border:1.5px dashed var(--line);border-radius:var(--radius);background:var(--surface);padding:26px 16px;text-align:center;position:relative;cursor:pointer;color:var(--muted)}
+.pick b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+.pick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.pick.busy{opacity:.6}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:12px}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.monthsel{display:flex;gap:8px;flex:1;min-width:0}
+select,input[type=text],input[type=time],textarea{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:16px;min-height:44px;width:100%}
+input[type=time]{-webkit-appearance:none;appearance:none;font-family:var(--font-mono)}
+.monthsel select{width:auto;flex:1;min-width:0;font-weight:600;background:var(--surface)}
+.badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.warn{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)}
+
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dow{font-size:11px;text-align:center;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.day{aspect-ratio:1/1.05;border:1px solid var(--line);border-radius:8px;background:var(--bg);position:relative;cursor:pointer;padding:0;display:grid;place-items:center;font-weight:600;font-size:15px;touch-action:manipulation;min-width:0;padding-top:12px}
+.day .n{position:absolute;top:3px;right:5px;font-family:var(--font-mono);font-size:11px;font-weight:400;opacity:.75}
+.day .dot{position:absolute;top:5px;left:5px;width:8px;height:8px;border-radius:50%;background:var(--note);box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+.day .dot.hint{background:transparent;border:2px solid var(--note)}
+.day.empty{visibility:hidden}
+.day.has{border-color:transparent;color:#1f1b18}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+details summary{cursor:pointer;color:var(--muted);font-weight:500;font-size:14px;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ "} details[open] summary::before{content:"▾ "}
+.preview{margin-top:10px;width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+
+.codes{display:flex;flex-direction:column;gap:10px}
+.code{display:grid;grid-template-columns:52px 1fr;gap:8px 10px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px}
+.code .tag{grid-row:span 2;height:52px;border-radius:10px;display:grid;place-items:center;font-weight:700;color:#1f1b18;position:relative;overflow:hidden}
+.code .tag input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.code .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
+.code .row > *{min-width:0}
+.code input.sig{width:70px;font-weight:600;text-transform:uppercase}
+.code input.tit{flex:1}
+.code input[type=time]{width:auto;flex:1;min-width:96px}
+.tog{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);cursor:pointer}
+.tog input{width:20px;height:20px;accent-color:var(--accent)}
+
+.export{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:8px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
+.export .sum{font-size:14px;color:var(--muted);text-align:center}
+.export .sum b{color:var(--ink)}
+.howto{font-size:14px;color:var(--muted);margin:0;padding-left:20px}
+.howto li{margin:2px 0}
+
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow-y:auto;border-radius:18px 18px 0 0;padding:18px 16px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+@media (min-width:700px){.overlay{align-items:center}.sheet{border-radius:18px}}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 60px;min-height:48px;border:2px solid var(--line);background:var(--surface);border-radius:12px;font-size:17px;font-weight:600;cursor:pointer;touch-action:manipulation;color:#1f1b18}
+.seg button.none{color:var(--ink)}
+.seg button[aria-checked="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink) inset}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:13px;font-weight:500;color:var(--muted)}
+textarea{min-height:80px;resize:vertical}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90%}
+.err{color:var(--danger);font-size:14px;margin:0}
+</style>
+</head>
+<body>
+<main class="wrap" id="app">
+  <header class="top">
+    <h1>Turni Lorena</h1>
+    <p>Dallo screenshot di Shifter al Calendario di iPhone.</p>
+  </header>
+
+  <label class="pick" id="pick">
+    <b>Carica screenshot</b>
+    <span class="small">Uno o più mesi di Shifter. Il mese si riconosce da solo.</span>
+    <input type="file" id="file" accept="image/*" multiple>
+  </label>
+
+  <section id="months" style="display:flex;flex-direction:column;gap:16px"></section>
+
+  <details id="codesBox">
+    <summary>Sigle e orari</summary>
+    <div class="codes" id="codes" style="margin-top:10px"></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn small" id="addCode">+ Nuova sigla</button>
+      <button class="btn small ghost" id="resetCodes">Ripristina predefinite</button>
+    </div>
+    <p class="hint" style="margin-top:8px">Tocca il quadratino colorato per cambiare colore. Le sigle senza "Esporta" restano visibili qui ma non finiscono nel calendario. Le sigle nuove vanno assegnate a mano toccando il giorno.</p>
+  </details>
+
+  <section id="exportBox" class="export" hidden>
+    <div class="sum" id="sum"></div>
+    <button class="btn primary big" id="dl">Aggiungi al Calendario</button>
+    <button class="btn small ghost" id="dlFile" style="align-self:center">oppure scarica il file .ics</button>
+  </section>
+
+  <details id="howBox">
+    <summary>Come importare su iPhone</summary>
+    <ol class="howto" style="margin-top:8px">
+      <li>Apri questa pagina in <b>Safari</b> (non dentro altre app).</li>
+      <li>Tocca <b>Aggiungi al Calendario</b>.</li>
+      <li>Scegli il calendario <b>Turni Lorena</b> e tocca <b>Aggiungi tutto</b>.</li>
+    </ol>
+    <p class="hint" style="margin-top:6px">Se Safari non apre il calendario, usa "scarica il file .ics", poi condividilo via Mail a te stesso e tocca l'allegato nella mail.</p>
+  </details>
+</main>
+
+<script>
+function detectShifter(px, W, H) {
+  const lum = (i) => 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+  const DARK = 70;
+
+  // Run scuro più lungo in una riga (tollera buchi di 3px dovuti al JPEG)
+  function longestRunRow(y) {
+    let best = { len: 0, xs: 0, xe: 0 }, start = -1, last = -10;
+    for (let x = 0; x < W; x++) {
+      if (lum((y * W + x) * 4) < DARK) {
+        if (x - last > 4) start = x;
+        last = x;
+        if (last - start > best.len) best = { len: last - start, xs: start, xe: last };
+      }
+    }
+    return best;
+  }
+
+  const runs = [];
+  for (let y = 0; y < H; y++) runs.push(longestRunRow(y));
+  const maxLen = Math.max(...runs.map((r) => r.len));
+  if (maxLen < W * 0.6) return { error: "Griglia non trovata" };
+
+  // Linee a tutta larghezza (unisci righe adiacenti)
+  const full = [];
+  for (let y = 0; y < H; y++) {
+    if (runs[y].len >= maxLen * 0.93) {
+      const prev = full[full.length - 1];
+      if (prev && y - prev.y1 <= 3) prev.y1 = y;
+      else full.push({ y0: y, y1: y, xs: runs[y].xs, xe: runs[y].xe });
+    }
+  }
+  if (full.length < 2) return { error: "Righe della griglia non trovate" };
+  const ys = full.map((l) => (l.y0 + l.y1) / 2);
+  const diffs = [];
+  for (let i = 1; i < ys.length; i++) diffs.push(ys[i] - ys[i - 1]);
+  diffs.sort((a, b) => a - b);
+  const h = diffs[Math.floor(diffs.length / 2)];
+  // tieni solo le linee coerenti col passo
+  const left = Math.min(...full.map((l) => l.xs)), right = Math.max(...full.map((l) => l.xe));
+  const cw = (right - left) / 7;
+
+  // Cerca una linea parziale vicino a y (run lungo almeno metà cella)
+  function partialNear(y) {
+    const tol = Math.round(h * 0.06);
+    let best = null;
+    for (let yy = Math.round(y - tol); yy <= Math.round(y + tol); yy++) {
+      if (yy < 0 || yy >= H) continue;
+      const r = runs[yy];
+      if (r.len >= cw * 0.8 && (!best || r.len > best.len)) best = { ...r, y: yy };
+    }
+    return best;
+  }
+
+  const firstFull = ys[0], lastFull = ys[ys.length - 1];
+  let top = firstFull, offset = 0;
+  const pt = partialNear(firstFull - h);
+  if (pt) { top = pt.y; offset = Math.max(0, Math.min(6, Math.round((pt.xs - left) / cw))); }
+  let bottom = lastFull, lastCol = 6;
+  const pb = partialNear(lastFull + h);
+  if (pb) { bottom = pb.y; lastCol = Math.max(0, Math.min(6, Math.round((pb.xe - left) / cw) - 1)); }
+  const weeks = Math.round((bottom - top) / h);
+
+  // Colore mediano di un rettangolo
+  function median(x0, y0, x1, y1) {
+    const R = [], G = [], B = [];
+    for (let y = Math.round(y0); y < y1; y += 2)
+      for (let x = Math.round(x0); x < x1; x += 2) {
+        const i = (y * W + x) * 4; R.push(px[i]); G.push(px[i + 1]); B.push(px[i + 2]);
+      }
+    const m = (a) => a.sort((p, q) => p - q)[a.length >> 1];
+    return [m(R), m(G), m(B)];
+  }
+
+  const cells = [];
+  for (let r = 0; r < weeks; r++)
+    for (let c = 0; c < 7; c++) {
+      const x = left + c * cw, y = top + r * h;
+      const fill = median(x + cw * 0.15, y + h * 0.78, x + cw * 0.85, y + h * 0.94);
+      const band = median(x + cw * 0.08, y + h * 0.17, x + cw * 0.92, y + h * 0.27);
+      cells.push({ r, c, x, y, w: cw, h, fill, band });
+    }
+  return { left, right, top, h, cw, offset, lastCol, weeks, cells };
+}
+
+function hsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  let hh = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [hh * 60, s, l];
+}
+
+// Sigla dal colore di riempimento
+function classify(rgb) {
+  const [h, s, l] = hsl(rgb);
+  if (l > 0.86 || s < 0.15) return "";        // bianco o sbiadito (altro mese)
+  if (h >= 95 && h < 175) return "G";
+  if (h >= 225 && h < 262) return "N";
+  if (h >= 262 && h < 300) return "CS";
+  return "?";
+}
+
+// C'è un'etichetta nota (fascia diversa dal riempimento, chiara e giallastra)?
+function hasNote(cell) {
+  const d = Math.abs(cell.band[0] - cell.fill[0]) + Math.abs(cell.band[1] - cell.fill[1]) + Math.abs(cell.band[2] - cell.fill[2]);
+  const [h, , l] = hsl(cell.band);
+  return d > 40 && l > 0.6 && h >= 30 && h <= 70;
+}
+
+
+
+const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+const DOW = ["L","M","M","G","V","S","D"];
+const LS_KEY = "turni-lorena-sigle-v1";
+const DEFAULT_CODES = [
+  { code:"G",  title:"Turno Giorno", start:"07:00", end:"19:00", color:"#86ca9d", export:true },
+  { code:"N",  title:"Turno Notte",  start:"19:00", end:"07:00", color:"#8a84bf", export:true },
+  { code:"CS", title:"Corso",        start:"08:30", end:"16:30", color:"#c3a6d8", export:true },
+];
+
+let codes = loadCodes();
+let months = [];        // {id, year, month(0-11), auto, cells, detOffset, days:{n:{code,note,hint}}, previewURL}
+
+function loadCodes(){
+  try { const s = JSON.parse(localStorage.getItem(LS_KEY)); if (Array.isArray(s) && s.length) return s; } catch {}
+  return DEFAULT_CODES.map(c => ({...c}));
+}
+function saveCodes(){ try { localStorage.setItem(LS_KEY, JSON.stringify(codes)); } catch {} }
+function codeInfo(k){ return codes.find(c => c.code === k); }
+function esc(s){ return String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.setAttribute("role","status"); t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3200); }
+
+const firstDow = (y,m) => (new Date(y,m,1).getDay()+6)%7;   // 0 = lunedì
+const daysIn = (y,m) => new Date(y,m+1,0).getDate();
+
+// Mese più vicino a oggi coerente con la griglia rilevata
+function guessMonth(det){
+  const span = (det.weeks-1)*7 + det.lastCol - det.offset + 1;
+  const now = new Date(); let best = null;
+  for (let k=-12; k<=24; k++){
+    const d = new Date(now.getFullYear(), now.getMonth()+k, 1);
+    const y=d.getFullYear(), m=d.getMonth();
+    if (firstDow(y,m)===det.offset && daysIn(y,m)===span){
+      const score = Math.abs(k) + (k<0 ? 0.5 : 0);
+      if (!best || score < best.score) best = {y, m, score};
+    }
+  }
+  return best;
+}
+
+function mapDays(mo){
+  const off = firstDow(mo.year, mo.month), nd = daysIn(mo.year, mo.month);
+  const days = {};
+  for (const c of mo.cells){
+    const n = c.r*7 + c.c - off + 1;
+    if (n<1 || n>nd) continue;
+    const k = classify(c.fill);
+    if (k) days[n] = { code:k, note:"", hint: hasNote(c) };
+  }
+  mo.days = days;
+}
+
+async function loadImage(file){
+  const url = URL.createObjectURL(file);
+  const img = new Image(); img.src = url;
+  await img.decode();
+  const scale = Math.min(1, 900/img.naturalWidth);
+  const W = Math.round(img.naturalWidth*scale), H = Math.round(img.naturalHeight*scale);
+  const cv = document.createElement("canvas"); cv.width=W; cv.height=H;
+  const ctx = cv.getContext("2d", {willReadFrequently:true});
+  ctx.drawImage(img, 0, 0, W, H);
+  return { cv, ctx, W, H, url };
+}
+
+function drawPreview(src, det){
+  const cv = document.createElement("canvas"); cv.width = src.W; cv.height = src.H;
+  const ctx = cv.getContext("2d"); ctx.drawImage(src.cv, 0, 0);
+  ctx.lineWidth = 4; ctx.font = "bold 28px sans-serif";
+  for (const c of det.cells){
+    const k = classify(c.fill);
+    ctx.strokeStyle = k ? "#e0322b" : "rgba(224,50,43,.35)";
+    ctx.strokeRect(c.x+4, c.y+4, c.w-8, c.h-8);
+  }
+  return cv.toDataURL("image/jpeg", .7);
+}
+
+async function handleFiles(files){
+  const pick = document.getElementById("pick"); pick.classList.add("busy");
+  for (const f of files){
+    try {
+      const src = await loadImage(f);
+      const det = detectShifter(src.ctx.getImageData(0,0,src.W,src.H).data, src.W, src.H);
+      URL.revokeObjectURL(src.url);
+      if (det.error){ toast(f.name + ": " + det.error); continue; }
+      const g = guessMonth(det), now = new Date();
+      const mo = { id: Math.random().toString(36).slice(2), year: g ? g.y : now.getFullYear(), month: g ? g.m : now.getMonth(),
+                   auto: !!g, cells: det.cells, preview: drawPreview(src, det), days:{} };
+      mapDays(mo);
+      months.push(mo);
+    } catch(e){ toast("Immagine non leggibile: " + (f.name||"")); }
+  }
+  months.sort((a,b) => (a.year*12+a.month) - (b.year*12+b.month));
+  pick.classList.remove("busy");
+  render();
+}
+
+function yearOptions(sel){
+  const y0 = new Date().getFullYear(); let o = "";
+  for (let y=y0-1; y<=y0+2; y++) o += `<option value="${y}" ${y===sel?"selected":""}>${y}</option>`;
+  return o;
+}
+
+function renderMonth(mo){
+  const off = firstDow(mo.year, mo.month), nd = daysIn(mo.year, mo.month);
+  let cal = DOW.map(d => `<div class="dow">${d}</div>`).join("");
+  for (let i=0;i<off;i++) cal += `<div class="day empty"></div>`;
+  for (let n=1;n<=nd;n++){
+    const d = mo.days[n], ci = d && codeInfo(d.code);
+    const style = d ? `style="background:${ci ? ci.color : "#bbb"}"` : "";
+    const dot = d ? (d.note ? `<span class="dot"></span>` : (d.hint ? `<span class="dot hint"></span>` : "")) : "";
+    cal += `<button class="day ${d?"has":""}" data-mo="${mo.id}" data-n="${n}" ${style} aria-label="${n} ${MESI[mo.month]}${d?": "+esc(d.code):""}">
+      <span class="n">${n}</span>${dot}${d?esc(d.code):""}</button>`;
+  }
+  const count = Object.values(mo.days).reduce((a,d)=>{a[d.code]=(a[d.code]||0)+1;return a;},{});
+  const summary = Object.entries(count).map(([k,v]) => `${v} ${esc(k)}`).join(" · ") || "nessun turno";
+  return `<article class="card">
+    <div class="card-head">
+      <div class="monthsel">
+        <select data-mo="${mo.id}" data-f="month">${MESI.map((m,i)=>`<option value="${i}" ${i===mo.month?"selected":""}>${m}</option>`).join("")}</select>
+        <select data-mo="${mo.id}" data-f="year" style="flex:0 0 96px">${yearOptions(mo.year)}</select>
+      </div>
+      <button class="btn small danger" data-del="${mo.id}">Rimuovi</button>
+    </div>
+    <div class="small muted">${mo.auto ? "Mese riconosciuto dallo screenshot" : '<span class="badge warn">Mese non riconosciuto: sceglilo tu</span>'} · ${summary}</div>
+    <div class="cal">${cal}</div>
+    <details><summary>Controlla lo screenshot</summary><img class="preview" src="${mo.preview}" alt="Screenshot con le celle rilevate"></details>
+  </article>`;
+}
+
+function renderLegend(){
+  return `<div class="legend">${codes.map(c=>`<span><i class="sw" style="background:${c.color}"></i>${esc(c.code)}${c.export?"":" (non esportato)"}</span>`).join("")}
+    <span><i class="sw" style="background:var(--note);border-radius:50%"></i>nota</span>
+    <span><i class="sw" style="border:2px solid var(--note);border-radius:50%"></i>nota da scrivere</span></div>`;
+}
+
+function render(){ renderMain(); renderCodes(); }
+function renderMain(){
+  const box = document.getElementById("months");
+  box.innerHTML = months.length ? renderLegend() + months.map(renderMonth).join("") : "";
+  const ev = buildEvents();
+  const ex = document.getElementById("exportBox");
+  ex.hidden = !months.length;
+  const byCode = ev.reduce((a,e)=>{a[e.code]=(a[e.code]||0)+1;return a;},{});
+  document.getElementById("sum").innerHTML = ev.length
+    ? `<b>${ev.length} eventi</b> pronti · ` + Object.entries(byCode).map(([k,v])=>`${v} ${esc(codeInfo(k).title)}`).join(", ")
+    : "Nessun turno da esportare";
+  const dl = document.getElementById("dl");
+  dl.disabled = !ev.length;
+  dl.hidden = false;
+}
+
+function renderCodes(){
+  document.getElementById("codes").innerHTML = codes.map((c,i)=>`
+    <div class="code">
+      <div class="tag" style="background:${c.color}">${esc(c.code)||"?"}<input type="color" value="${c.color}" data-ci="${i}" data-cf="color" aria-label="Colore"></div>
+      <div class="row">
+        <input type="text" class="sig" value="${esc(c.code)}" data-ci="${i}" data-cf="code" aria-label="Sigla" maxlength="4">
+        <input type="text" class="tit" value="${esc(c.title)}" data-ci="${i}" data-cf="title" aria-label="Nome evento">
+      </div>
+      <div class="row">
+        <input type="time" value="${c.start}" data-ci="${i}" data-cf="start" aria-label="Inizio">
+        <span class="muted">→</span>
+        <input type="time" value="${c.end}" data-ci="${i}" data-cf="end" aria-label="Fine">
+        <label class="tog"><input type="checkbox" ${c.export?"checked":""} data-ci="${i}" data-cf="export">Esporta</label>
+        ${i>2?`<button class="btn small danger" data-cdel="${i}">Elimina</button>`:""}
+      </div>
+    </div>`).join("");
+}
+
+// ---------- foglio di modifica giorno ----------
+function openDay(mo, n){
+  const cur = mo.days[n] || {code:"", note:"", hint:false};
+  let sel = cur.code;
+  const ov = document.createElement("div"); ov.className = "overlay";
+  ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Giorno ${n}">
+    <div class="sheet-head"><h2>${n} ${MESI[mo.month]}</h2><button class="btn ghost" data-x>Chiudi</button></div>
+    <div class="seg" role="radiogroup">
+      <button class="none" role="radio" data-k="">Libero</button>
+      ${codes.filter(c=>c.code).map(c=>`<button role="radio" data-k="${esc(c.code)}" style="background:${c.color}">${esc(c.code)}</button>`).join("")}
+    </div>
+    <div class="field" id="noteF">
+      <label for="noteT">Nota del turno</label>
+      <textarea id="noteT" placeholder="Scrivi qui la nota gialla, se vuoi riportarla">${esc(cur.note||"")}</textarea>
+      ${cur.hint && !cur.note ? `<p class="hint">Nello screenshot questo giorno ha una nota gialla.</p>`:""}
+      <p class="hint">Le note dei giorni liberi non vengono esportate.</p>
+    </div>
+    <button class="btn primary big" data-save>Salva</button>
+  </div>`;
+  const upd = () => {
+    ov.querySelectorAll("[data-k]").forEach(b => b.setAttribute("aria-checked", b.dataset.k===sel ? "true":"false"));
+    ov.querySelector("#noteF").style.display = sel ? "" : "none";
+  };
+  ov.addEventListener("click", e => {
+    if (e.target === ov || e.target.closest("[data-x]")) return ov.remove();
+    const k = e.target.closest("[data-k]"); if (k){ sel = k.dataset.k; upd(); return; }
+    if (e.target.closest("[data-save]")){
+      const note = ov.querySelector("#noteT").value.trim();
+      if (sel) mo.days[n] = {code:sel, note, hint:cur.hint}; else delete mo.days[n];
+      ov.remove(); render();
+    }
+  });
+  document.body.appendChild(ov); upd();
+}
+
+// ---------- ICS ----------
+function buildEvents(){
+  const map = new Map();
+  for (const mo of months) for (const [n,d] of Object.entries(mo.days)){
+    const ci = codeInfo(d.code);
+    if (!ci || !ci.export || !ci.start || !ci.end) continue;
+    const date = new Date(mo.year, mo.month, +n);
+    map.set(`${mo.year}-${mo.month}-${n}`, { date, code:d.code, note:d.note, ci });
+  }
+  return [...map.values()].sort((a,b)=>a.date-b.date);
+}
+const pad = x => String(x).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+const icsEsc = s => s.replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
+function fold(line){
+  const out = []; let cur = "", bytes = 0;
+  for (const ch of line){
+    const b = new TextEncoder().encode(ch).length;
+    if (bytes + b > (out.length ? 74 : 75)){ out.push(cur); cur = ""; bytes = 0; }
+    cur += ch; bytes += b;
+  }
+  out.push(cur); return out.join("\r\n ");
+}
+function buildICS(evs){
+  const now = new Date(), stamp = now.toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const L = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Turni Lorena//IT","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Turni Lorena","X-WR-TIMEZONE:Europe/Rome",
+    "BEGIN:VTIMEZONE","TZID:Europe/Rome",
+    "BEGIN:DAYLIGHT","TZOFFSETFROM:+0100","TZOFFSETTO:+0200","TZNAME:CEST","DTSTART:19700329T020000","RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU","END:DAYLIGHT",
+    "BEGIN:STANDARD","TZOFFSETFROM:+0200","TZOFFSETTO:+0100","TZNAME:CET","DTSTART:19701025T030000","RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU","END:STANDARD",
+    "END:VTIMEZONE"];
+  for (const e of evs){
+    const [sh,sm] = e.ci.start.split(":"), [eh,em] = e.ci.end.split(":");
+    const endDate = new Date(e.date);
+    if (e.ci.end <= e.ci.start) endDate.setDate(endDate.getDate()+1);   // turno che finisce il giorno dopo
+    L.push("BEGIN:VEVENT",
+      `UID:turno-lorena-${ymd(e.date)}-${e.code.replace(/[^A-Za-z0-9]/g,"")}@turni-lorena`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;TZID=Europe/Rome:${ymd(e.date)}T${sh}${sm}00`,
+      `DTEND;TZID=Europe/Rome:${ymd(endDate)}T${eh}${em}00`,
+      fold(`SUMMARY:${icsEsc(e.ci.title || e.code)}`));
+    if (e.note) L.push(fold(`DESCRIPTION:${icsEsc(e.note)}`));
+    L.push("END:VEVENT");
+  }
+  L.push("END:VCALENDAR");
+  return L.join("\r\n") + "\r\n";
+}
+function fileName(evs){
+  const ks = [...new Set(evs.map(e => `${MESI[e.date.getMonth()].slice(0,3)}${e.date.getFullYear()}`))];
+  return `Turni_Lorena_${ks.length>2 ? ks[0]+"-"+ks[ks.length-1] : ks.join("_")}.ics`;
+}
+
+
+// ---------- eventi UI ----------
+document.getElementById("file").addEventListener("change", e => { const fs=[...e.target.files]; e.target.value=""; if (fs.length) handleFiles(fs); });
+document.getElementById("months").addEventListener("click", e => {
+  const day = e.target.closest(".day[data-n]");
+  if (day){ const mo = months.find(m=>m.id===day.dataset.mo); return openDay(mo, +day.dataset.n); }
+  const del = e.target.closest("[data-del]");
+  if (del){ months = months.filter(m=>m.id!==del.dataset.del); render(); }
+});
+document.getElementById("months").addEventListener("change", e => {
+  const s = e.target.closest("select[data-mo]"); if (!s) return;
+  const mo = months.find(m=>m.id===s.dataset.mo);
+  mo[s.dataset.f] = +s.value; mo.auto = true; mapDays(mo);
+  months.sort((a,b) => (a.year*12+a.month) - (b.year*12+b.month)); render();
+});
+const codesEl = document.getElementById("codes");
+codesEl.addEventListener("input", e => {
+  const t = e.target, i = t.dataset.ci; if (i===undefined) return;
+  const c = codes[+i], f = t.dataset.cf;
+  if (f === "export") c.export = t.checked;
+  else if (f === "code"){
+    const old = c.code, nv = t.value.trim().toUpperCase();
+    for (const mo of months) for (const d of Object.values(mo.days)) if (d.code===old) d.code = nv;
+    c.code = nv;
+  } else c[f] = t.value;
+  if (f === "color") t.parentElement.style.background = t.value;
+  saveCodes();
+});
+codesEl.addEventListener("change", () => renderMain());
+codesEl.addEventListener("click", e => {
+  const d = e.target.closest("[data-cdel]"); if (!d) return;
+  codes.splice(+d.dataset.cdel, 1); saveCodes(); render();
+});
+document.getElementById("addCode").addEventListener("click", () => {
+  codes.push({code:"", title:"Nuovo turno", start:"08:00", end:"14:00", color:"#f0b46b", export:true}); saveCodes(); render();
+  const ins = codesEl.querySelectorAll("input.sig"); ins[ins.length-1].focus();
+});
+document.getElementById("resetCodes").addEventListener("click", () => {
+  codes = DEFAULT_CODES.map(c=>({...c})); saveCodes(); for (const mo of months) mapDays(mo); render(); toast("Sigle ripristinate");
+});
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function downloadICS(asFile){
+  const evs = buildEvents(); if (!evs.length) return;
+  const ics = buildICS(evs), name = fileName(evs);
+  const a = document.createElement("a");
+  if (isIOS && !asFile){
+    // Safari apre il calendario con "Aggiungi tutto"
+    a.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+  } else {
+    a.href = URL.createObjectURL(new Blob([ics], {type:"text/calendar;charset=utf-8"}));
+    a.download = name;
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+  document.body.appendChild(a); a.click(); a.remove();
+}
+document.getElementById("dl").addEventListener("click", () => downloadICS(false));
+document.getElementById("dlFile").addEventListener("click", () => downloadICS(true));
+render();
+</script>
+</body>
+</html>
