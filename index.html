@@ -252,16 +252,21 @@ function hsl([r, g, b]) {
 
 // Sigla dal colore di riempimento
 function classify(rgb) {
-  const [h, s, l] = hsl(rgb);
-  if (l > 0.86 || s < 0.15) return "";        // bianco o sbiadito (altro mese)
-  // sigla col colore più vicino a quello della cella
-  let best = "", bd = 1e9;
-  for (const c of (typeof codes !== "undefined" ? codes : [])) {
-    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c.color || ""); if (!m || !c.code) continue;
-    const d = Math.hypot(rgb[0] - parseInt(m[1], 16), rgb[1] - parseInt(m[2], 16), rgb[2] - parseInt(m[3], 16));
-    if (d < bd) { bd = d; best = c.code; }
+  // confronta il colore della cella con le sigle, il bianco e le versioni sbiadite (giorni dei mesi vicini)
+  const hex = (c) => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c || ""); return m ? [1,2,3].map(i => parseInt(m[i], 16)) : null; };
+  const refs = [{ k: "", c: [255, 255, 255] }];
+  for (const s of (typeof codes !== "undefined" ? codes : [])) {
+    const c = hex(s.color); if (!c || !s.code) continue;
+    refs.push({ k: s.code, c });
+    refs.push({ k: "", c: c.map(v => 255 - 0.18 * (255 - v)) });
   }
-  return bd < 45 ? best : "?";
+  let best = refs[0], bd = 1e9;
+  for (const r of refs) {
+    const d = Math.hypot(rgb[0] - r.c[0], rgb[1] - r.c[1], rgb[2] - r.c[2]);
+    if (d < bd) { bd = d; best = r; }
+  }
+  if (!best.k) return "";
+  return bd < 45 ? best.k : "?";
 }
 
 // C'è un'etichetta nota (fascia diversa dal riempimento, chiara e giallastra)?
@@ -275,13 +280,13 @@ function hasNote(cell) {
 
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const DOW = ["L","M","M","G","V","S","D"];
-const LS_KEY = "turni-lorena-sigle-v2";
+const LS_KEY = "turni-lorena-sigle-v3";
 const DEFAULT_CODES = [
   { code:"G",   title:"Giorno",       start:"07:00", end:"19:00", color:"#84c99d", export:true },
   { code:"N",   title:"Notte",        start:"19:00", end:"23:55", color:"#8882be", export:true },
   { code:"CS",  title:"Corso",        start:"08:30", end:"16:30", color:"#c1a6d9", export:true },
-  { code:"Amb", title:"Ambulatorio",  start:"08:30", end:"16:30", color:"#f0b46b", export:true },
-  { code:"Fe",  title:"Ferie Lorena", allDay:true, start:"", end:"", color:"#7fc8e8", export:true },
+  { code:"Amb", title:"Ambulatorio",  start:"08:30", end:"16:30", color:"#f5d6db", export:true },
+  { code:"Fe",  title:"Ferie Lorena", allDay:true, start:"", end:"", color:"#84cdf0", export:true },
 ];
 
 let codes = loadCodes();
