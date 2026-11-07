@@ -84,9 +84,9 @@ details summary::before{content:"▸ "} details[open] summary::before{content:"�
 .code{display:grid;grid-template-columns:52px 1fr;gap:8px 10px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px}
 .code .tag{grid-row:span 2;height:52px;border-radius:10px;display:grid;place-items:center;font-weight:700;color:#1f1b18;position:relative;overflow:hidden}
 .code .tag input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer}
-.code .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
+.code .row{grid-column:2;display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
 .code .row > *{min-width:0}
-.code input.sig{width:70px;font-weight:600;text-transform:uppercase}
+.code input.sig{width:76px;font-weight:600}
 .code input.tit{flex:1}
 .code input[type=time]{width:auto;flex:1;min-width:96px}
 .tog{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);cursor:pointer}
@@ -136,7 +136,7 @@ textarea{min-height:80px;resize:vertical}
       <button class="btn small" id="addCode">+ Nuova sigla</button>
       <button class="btn small ghost" id="resetCodes">Ripristina predefinite</button>
     </div>
-    <p class="hint" style="margin-top:8px">Tocca il quadratino colorato per cambiare colore. Le sigle senza "Esporta" restano visibili qui ma non finiscono nel calendario. Le sigle nuove vanno assegnate a mano toccando il giorno.</p>
+    <p class="hint" style="margin-top:8px">Tocca il quadratino colorato per cambiare colore: se coincide con il colore di Shifter, la sigla viene riconosciuta da sola dallo screenshot. Le sigle senza "Esporta" non finiscono nel calendario.</p>
   </details>
 
   <section id="exportBox" class="export" hidden>
@@ -254,10 +254,14 @@ function hsl([r, g, b]) {
 function classify(rgb) {
   const [h, s, l] = hsl(rgb);
   if (l > 0.86 || s < 0.15) return "";        // bianco o sbiadito (altro mese)
-  if (h >= 95 && h < 175) return "G";
-  if (h >= 225 && h < 262) return "N";
-  if (h >= 262 && h < 300) return "CS";
-  return "?";
+  // sigla col colore più vicino a quello della cella
+  let best = "", bd = 1e9;
+  for (const c of (typeof codes !== "undefined" ? codes : [])) {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c.color || ""); if (!m || !c.code) continue;
+    const d = Math.hypot(rgb[0] - parseInt(m[1], 16), rgb[1] - parseInt(m[2], 16), rgb[2] - parseInt(m[3], 16));
+    if (d < bd) { bd = d; best = c.code; }
+  }
+  return bd < 45 ? best : "?";
 }
 
 // C'è un'etichetta nota (fascia diversa dal riempimento, chiara e giallastra)?
@@ -271,11 +275,13 @@ function hasNote(cell) {
 
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const DOW = ["L","M","M","G","V","S","D"];
-const LS_KEY = "turni-lorena-sigle-v1";
+const LS_KEY = "turni-lorena-sigle-v2";
 const DEFAULT_CODES = [
-  { code:"G",  title:"Turno Giorno", start:"07:00", end:"19:00", color:"#86ca9d", export:true },
-  { code:"N",  title:"Turno Notte",  start:"19:00", end:"07:00", color:"#8a84bf", export:true },
-  { code:"CS", title:"Corso",        start:"08:30", end:"16:30", color:"#c3a6d8", export:true },
+  { code:"G",   title:"Giorno",       start:"07:00", end:"19:00", color:"#84c99d", export:true },
+  { code:"N",   title:"Notte",        start:"19:00", end:"23:55", color:"#8882be", export:true },
+  { code:"CS",  title:"Corso",        start:"08:30", end:"16:30", color:"#c1a6d9", export:true },
+  { code:"Amb", title:"Ambulatorio",  start:"08:30", end:"16:30", color:"#f0b46b", export:true },
+  { code:"Fe",  title:"Ferie Lorena", allDay:true, start:"", end:"", color:"#7fc8e8", export:true },
 ];
 
 let codes = loadCodes();
@@ -428,11 +434,14 @@ function renderCodes(){
         <input type="text" class="tit" value="${esc(c.title)}" data-ci="${i}" data-cf="title" aria-label="Nome evento">
       </div>
       <div class="row">
-        <input type="time" value="${c.start}" data-ci="${i}" data-cf="start" aria-label="Inizio">
+        ${c.allDay ? "" : `<input type="time" value="${c.start}" data-ci="${i}" data-cf="start" aria-label="Inizio">
         <span class="muted">→</span>
-        <input type="time" value="${c.end}" data-ci="${i}" data-cf="end" aria-label="Fine">
+        <input type="time" value="${c.end}" data-ci="${i}" data-cf="end" aria-label="Fine">`}
+      </div>
+      <div class="row">
+        <label class="tog"><input type="checkbox" ${c.allDay?"checked":""} data-ci="${i}" data-cf="allDay">Tutto il giorno</label>
         <label class="tog"><input type="checkbox" ${c.export?"checked":""} data-ci="${i}" data-cf="export">Esporta</label>
-        ${i>2?`<button class="btn small danger" data-cdel="${i}">Elimina</button>`:""}
+        ${i>1?`<button class="btn small danger" data-cdel="${i}">Elimina</button>`:""}
       </div>
     </div>`).join("");
 }
@@ -477,7 +486,7 @@ function buildEvents(){
   const map = new Map();
   for (const mo of months) for (const [n,d] of Object.entries(mo.days)){
     const ci = codeInfo(d.code);
-    if (!ci || !ci.export || !ci.start || !ci.end) continue;
+    if (!ci || !ci.export || (!ci.allDay && (!ci.start || !ci.end))) continue;
     const date = new Date(mo.year, mo.month, +n);
     map.set(`${mo.year}-${mo.month}-${n}`, { date, code:d.code, note:d.note, ci });
   }
@@ -503,6 +512,15 @@ function buildICS(evs){
     "BEGIN:STANDARD","TZOFFSETFROM:+0200","TZOFFSETTO:+0100","TZNAME:CET","DTSTART:19701025T030000","RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU","END:STANDARD",
     "END:VTIMEZONE"];
   for (const e of evs){
+    if (e.ci.allDay){
+      const next = new Date(e.date); next.setDate(next.getDate()+1);
+      L.push("BEGIN:VEVENT",
+        `UID:turno-lorena-${ymd(e.date)}-${e.code.replace(/[^A-Za-z0-9]/g,"")}@turni-lorena`,
+        `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${ymd(e.date)}`, `DTEND;VALUE=DATE:${ymd(next)}`,
+        fold(`SUMMARY:${icsEsc(e.ci.title || e.code)}`));
+      if (e.note) L.push(fold(`DESCRIPTION:${icsEsc(e.note)}`));
+      L.push("END:VEVENT"); continue;
+    }
     const [sh,sm] = e.ci.start.split(":"), [eh,em] = e.ci.end.split(":");
     const endDate = new Date(e.date);
     if (e.ci.end <= e.ci.start) endDate.setDate(endDate.getDate()+1);   // turno che finisce il giorno dopo
@@ -542,16 +560,16 @@ const codesEl = document.getElementById("codes");
 codesEl.addEventListener("input", e => {
   const t = e.target, i = t.dataset.ci; if (i===undefined) return;
   const c = codes[+i], f = t.dataset.cf;
-  if (f === "export") c.export = t.checked;
+  if (f === "export" || f === "allDay") c[f] = t.checked;
   else if (f === "code"){
-    const old = c.code, nv = t.value.trim().toUpperCase();
+    const old = c.code, nv = t.value.trim();
     for (const mo of months) for (const d of Object.values(mo.days)) if (d.code===old) d.code = nv;
     c.code = nv;
   } else c[f] = t.value;
   if (f === "color") t.parentElement.style.background = t.value;
   saveCodes();
 });
-codesEl.addEventListener("change", () => renderMain());
+codesEl.addEventListener("change", e => { if (e.target.dataset.cf === "allDay") renderCodes(); renderMain(); });
 codesEl.addEventListener("click", e => {
   const d = e.target.closest("[data-cdel]"); if (!d) return;
   codes.splice(+d.dataset.cdel, 1); saveCodes(); render();

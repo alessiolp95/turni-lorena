@@ -8,9 +8,11 @@ Webapp che converte gli screenshot mensili di **Shifter** in eventi per il Calen
 
 | Sigla | Evento | Orario |
 |---|---|---|
-| G | Turno Giorno | 07:00 → 19:00 |
-| N | Turno Notte | 19:00 → 07:00 (giorno dopo) |
+| G | Giorno | 07:00 → 19:00 |
+| N | Notte | 19:00 → 23:55 |
 | CS | Corso | 08:30 → 16:30 |
+| Amb | Ambulatorio | 08:30 → 16:30 |
+| Fe | Ferie Lorena | tutto il giorno |
 
 Le sigle e gli orari si modificano dalla pagina ("Sigle e orari") e restano salvati nel browser.
 Tutto avviene nel telefono: le immagini non vengono caricate da nessuna parte.
